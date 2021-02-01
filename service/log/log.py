@@ -4,7 +4,7 @@ from django.db.models import F
 from common.models import Log, User
 from service.user.user import get_user
 import time
-
+import math
 
 def dispatcher(request):
     if request.method == 'PUT':
@@ -20,13 +20,13 @@ def dispatcher(request):
 
 
 def list_log(request):
-    userinfo = get_user(request)
-    if userinfo.type == 3:
-        return JsonResponse({"ret": 1, "msg": "未登录"})
-    elif userinfo.type == 2:
-        return JsonResponse({"ret": 1, "msg": "登录超时"})
-    if userinfo.type == 1:
-        if userinfo.user.type == 1:
+    user_info = get_user(request)
+    if user_info.type == 3:
+        return JsonResponse({"ret": 2, "msg": "未登录"})
+    elif user_info.type == 2:
+        return JsonResponse({"ret": 2, "msg": "登录超时"})
+    if user_info.type == 1:
+        if user_info.user.type == 1:
             return JsonResponse({"ret": 1, "msg": "没有查看该功能权限"})
         else:
             qs = Log.objects.annotate(name=F('user__name')).values().order_by(
