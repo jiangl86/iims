@@ -77,10 +77,10 @@ def add_project(request):
     user_right = project_right(request, action)
     if user_right != 'pass':
         return user_right
-    params = request.params
-    params_string = json.dumps(params)
     ip = get_ip(request)
-    user_id = params['user_id']
+    user_id = request.params['user_id']
+    params = request.params['data']
+    params_string = json.dumps(params)
     user = User.objects.get(id=user_id, delete_state='0', state='1')
     if user.type != '0':
         save_log(action, '0', '无项目添加权限', ip, user_id)
@@ -198,5 +198,5 @@ def project_right(request, action):
     elif user_info['type'] == 2:
         save_log(action, '0', '用户登录超时', ip)
         return JsonResponse({"ret": 2, "msg": "登录超时"})
-    elif type == 1:
+    elif user_info['type'] == 1:
         return 'pass'  # 此处不做权限判断，在各个子模块直接判断
