@@ -43,6 +43,13 @@ class Project(models.Model):
     delete_state = models.CharField(max_length=1, default='0')
 
 
+class ProjectUser(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    type = models.CharField(max_length=1, default='2')
+    delete_state = models.CharField(max_length=1, default='0')
+
+
 class Module(models.Model):
     name = models.CharField(max_length=200)
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
@@ -51,6 +58,13 @@ class Module(models.Model):
     others = models.CharField(max_length=1000, null=True)
     user = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)
     create_time = models.DateTimeField(default=datetime.datetime.now)
+    delete_state = models.CharField(max_length=1, default='0')
+
+
+class ModuleUser(models.Model):
+    module = models.ForeignKey(Module, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    type = models.CharField(max_length=1, default='2')
     delete_state = models.CharField(max_length=1, default='0')
 
 

@@ -4,8 +4,9 @@ from django.db.models import Q
 import time, datetime
 from common.models import User
 from service.log.log import save_log
-from common.common import get_ip
+from common.common import get_ip, get_user
 import math
+import uuid
 
 
 def dispatcher(request):
@@ -37,12 +38,9 @@ def dispatcher(request):
 
 
 def login(request):
-    auth = json.loads(request.headers['authorization'])
-    auth_string = json.dumps(auth)
-    if 'username' not in auth_string or 'password' not in auth_string:
-        return JsonResponse({"ret": 1, "msg": "请输入用户名或手机号"})
-    account = auth['username']
-    password = auth['password']
+    # auth = json.loads(request.headers['authorization'])
+    password = request.headers['authorization']
+    account = request.params['username']
     try:
         # 判断是否多次尝试密码，当天超过5次登陆失败，禁止再登陆
         today = datetime.datetime.now().date()
@@ -82,7 +80,8 @@ def list_user(request):
     params = request.params
     params_string = json.dumps(params)
     delete_state = params['delete_state']
-    qs = User.objects.filter(delete_state=delete_state).values('id', 'name', 'phone', 'type', 'state', 'create_time',
+    qs = User.objects.filter(delete_state=delete_state).values('id', 'name', 'phone', 'account', 'type', 'state',
+                                                               'create_time',
                                                                'delete_state')
     if 'name' in params_string:
         name = params['name']
@@ -99,10 +98,14 @@ def list_user(request):
             page_num = total_page
         qs = qs[(page_num - 1) * page_size:page_num * page_size]
     if len(qs) > 0:
-        log_list = list(qs)
+        user_list = list(qs)
+        index = 1
+        for item in user_list:
+            item['num'] = (page_num - 1) * page_size + index
+            index = index + 1
         return JsonResponse(
             {'ret': 0, 'total_page': total_page, 'total_count': total_count, 'page_num': page_num,
-             'retlist': log_list})
+             'retlist': user_list})
     return JsonResponse({"ret": 1, "msg": "暂无数据"})
 
 
@@ -111,7 +114,7 @@ def add_user(request):
     if user_right != 'pass':
         return user_right
     ip = get_ip(request)
-    params = request.params
+    params = request.params['data']
     params_string = json.dumps(params)
     if 'name' not in params_string or 'phone' not in params_string or 'account' not in params_string or 'type' not in params_string:
         return JsonResponse({"ret": 1, "msg": "用户信息不全"})
@@ -143,12 +146,14 @@ def update_user(request):
     user_right = login_right(request, '用户修改')
     if user_right != 'pass':
         return user_right
-    params = request.params
+    print(request.params)
+    params = request.params['data']
     params_string = json.dumps(params)
-    if 'update_user_id' not in params_string:
+    ip=get_ip(request)
+    if 'update_user_id' not in json.dumps(request.params):
         return JsonResponse({"ret": 1, "msg": "无要修改的用户id"})
     try:
-        update_user_id = params['update_user_id']
+        update_user_id = request.params['update_user_id']
         user = User.objects.get(id=update_user_id)
         detail = ''
         if 'phone' in params_string:
@@ -175,8 +180,17 @@ def update_user(request):
             else:
                 detail = detail + ',类型系统管理员'
             user.type = type
+        if 'state' in params_string:
+            state=params['state']
+            if state!='1':
+                state='2'
+                detail=detail+',状态未激活'
+            else:
+                detail = detail + ',状态正常'
+            user.state=state
         user.save()
-        save_log('用户修改', '1', detail, ip, params['user_id'])
+        save_log('用户修改', '1', detail, ip, request.params['user_id'])
+        return JsonResponse({"ret": 0, "msg": "修改成功"})
     except User.DoesNotExist:
         return JsonResponse({"ret": 1, "msg": "数据错误"})
 
@@ -184,6 +198,7 @@ def update_user(request):
 def update_password(request):
     user_info = get_user(request)
     ip = get_ip(request)
+    user_id = request.params['user_id']
     action = '密码修改'
     if user_info['type'] == 3:
         save_log(action, '0', '用户未登录', ip)
@@ -191,12 +206,11 @@ def update_password(request):
     elif user_info['type'] == 2:
         save_log(action, '0', '用户登录超时', ip)
         return JsonResponse({"ret": 2, "msg": "登录超时"})
-    params = request.params
+    params = request.params['data']
     params_string = json.dumps(params)
     if 'old_password' not in params_string:
         return JsonResponse({"ret": 1, "msg": "请输入旧密码"})
     old_password = params['old_password']
-    user_id = params['user_id']
     user = User.objects.get(id=user_id)
     if user.password != old_password:
         return JsonResponse({"ret": 1, "msg": "旧密码不正确"})
@@ -214,7 +228,7 @@ def reset_password(request):
         return user_right
     if 'update_user_id' not in json.dumps(request.params):
         return JsonResponse({"ret": 1, "msg": "缺少需要重置的用户信息"})
-    update_user_id = request.params['update_user_id'].strip()
+    update_user_id = request.params['update_user_id']
     try:
         user = User.objects.get(id=update_user_id, delete_state='0')
         user.password = 'sss'  # 用md5加密
@@ -235,12 +249,13 @@ def delete_user(request):
     delete_user_ids = request.params['delete_user_ids']
     ip = get_ip(request)
     try:
-        users = User.objects.filter(id__in=delete_user_ids)
+        users = User.objects.filter(id__in=delete_user_ids.split(','))
         name = '成功删除用户：'
         if len(users) > 0:
             for user in users:
                 name = name + user.name + ','
-            users.delete()
+                user.delete_state = '1'
+                user.save()
             save_log('用户删除', '1', name, ip, request.params['user_id'])
             return JsonResponse({"ret": 0, "msg": "用户删除成功"})
     except Exception:
@@ -264,19 +279,3 @@ def login_right(request, action):
             save_log(action, '0', '用户无权限', ip)
             return JsonResponse({"ret": 1, "msg": "没有查看该功能权限"})
     return 'pass'
-
-
-# 通用功能，判断当前是否已经登录，要求每天必须登录一次，
-# 返回1代表正常登录，返回2表示登录超时，需重新登录，返回3代表未登录
-def get_user(request):
-    if 'user_id' not in json.dumps(request.params):
-        return {'user': None, 'type': 3}
-    user_id = request.params['user_id']
-    token = request.headers['authorization']
-    try:
-        user = User.objects.get(id=user_id, token=token, delete_state='0', state='1')
-        if int(time.time()) - user.token_time >= 24 * 60 * 60:
-            return {'user': None, 'type': 2}
-        return {'user': user, 'type': 1}
-    except User.DoesNotExist:
-        return {'user': None, 'type': 3}

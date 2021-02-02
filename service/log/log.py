@@ -2,7 +2,7 @@ from django.http import JsonResponse
 import json
 from django.db.models import F
 from common.models import Log, User
-from service.user.user import get_user
+from common.common import get_user
 import time
 import math
 
