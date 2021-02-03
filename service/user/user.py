@@ -73,10 +73,15 @@ def login(request):
 
 
 def list_user(request):
-    user_right = login_right(request, '用户查询')
-    if user_right != 'pass':
-        return user_right
+    action='用户查询'
+    user_info = get_user(request)
     ip = get_ip(request)
+    if user_info['type'] == 3:
+        save_log(action, '0', '用户未登录', ip)
+        return JsonResponse({"ret": 2, "msg": "未登录"})
+    elif user_info['type'] == 2:
+        save_log(action, '0', '用户登录超时', ip)
+        return JsonResponse({"ret": 2, "msg": "登录超时"})
     params = request.params
     params_string = json.dumps(params)
     delete_state = params['delete_state']
@@ -97,15 +102,24 @@ def list_user(request):
         if total_page < page_num and total_page > 0:
             page_num = total_page
         qs = qs[(page_num - 1) * page_size:page_num * page_size]
+    else:
+        page_num=1
+        page_size=1000
+        total_page=1
     if len(qs) > 0:
         user_list = list(qs)
+        total_count = len(qs)
         index = 1
         for item in user_list:
             item['num'] = (page_num - 1) * page_size + index
             index = index + 1
-        return JsonResponse(
-            {'ret': 0, 'total_page': total_page, 'total_count': total_count, 'page_num': page_num,
-             'retlist': user_list})
+        user=User.objects.get(id=request.params['user_id'])
+        result = {'ret': 0, 'total_page': total_page, 'total_count': total_count, 'page_num': page_num,
+                  'retlist': user_list}
+        if user.type=='0':
+            funcRight={'addFlag':'1','delFlag':'1','editFlag':1,'resetPassFlag':1}
+            result['funcRight']=funcRight
+        return JsonResponse(result)
     return JsonResponse({"ret": 1, "msg": "暂无数据"})
 
 

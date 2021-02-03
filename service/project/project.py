@@ -3,7 +3,8 @@ import json
 from common.common import get_ip, get_user
 from service.log.log import save_log
 from common.models import Project, ProjectUser, Module, User
-from django.db.models import Q
+from django.db.models import Q, F
+import math
 
 
 # 大多数接口为针对参数做校验，仅校验了权限和登录情况，后续需要在处理
@@ -42,6 +43,10 @@ def list_project(request):
     # 如果是系统管理员，直接返回所有的项目
     if user.type == '0':
         qs = Project.objects.filter(delete_state='0').all()
+    # 否则查询所有当前用户参与的项目列表
+    else:
+        qs = Project.objects.filter(projectuser__user_id=user_id, projectuser__delete_state='0').distinct()
+    if len(qs) > 0:
         if 'name' in params_string:
             name = params['name'].strip()
             qs = qs.filter(name__contains=name)
@@ -55,21 +60,45 @@ def list_project(request):
             if total_page < page_num and total_page > 0:
                 page_num = total_page
             qs = qs[(page_num - 1) * page_size:page_num * page_size]
+        else:
+            page_num = 1
+            page_size = 1000
+            total_count = len(qs)
+            total_page = 1
         if len(qs) > 0:
+            index = 1
             for item in qs:
-                admins = ProjectUser.objects.filter(id=item.id, type='0', delete_state='0')
-                developers = ProjectUser.objects.filter(id=item.id, type='1', delete_state='0')
-                others = ProjectUser.objects.filter(id=item.id, type='2', delete_state='0')
-                admin = {'ids': admins.value_list('user__id', flat=True),
-                         'names': admins.value_list('user__name', flat=True)}
-                project = {'id': item.id, 'name': item.name, 'description': item.description, 'admin': admin}
-            print(project)
+                project = {'id': item.id, 'name': item.name, 'description': item.description, 'state': item.state}
+                project['create_time'] = item.create_time.strftime('%Y-%m-%d %H:%M')
+                project['num'] = (page_num - 1) * page_size + index
+                index = index + 1
+                admin = item.projectuser_set.filter(type='0', delete_state='0').annotate(
+                    user_name=F('user__name')).values('user_id', 'user_name')
+                developer = item.projectuser_set.filter(type='1', delete_state='0').annotate(
+                    user_name=F('user__name')).values('user_id', 'user_name')
+                others = item.projectuser_set.filter(type='2', delete_state='0').annotate(
+                    user_name=F('user__name')).values('user_id', 'user_name')
+                if len(admin) > 0:
+                    project['admin'] = list(admin)
+                if len(developer) > 0:
+                    project['developer'] = list(developer)
+                if len(others) > 0:
+                    project['others'] = list(others)
+                if user.type != '0':
+                    is_admin = item.projectuser_set.filter(type='0', delete_state='0', user_id=user_id)
+                    if len(is_admin) > 0:
+                        project['editFlag'] = '1'
+                print(project)
+                project_list.append(project)
+            result = {'ret': 0, 'msg': '查询成功', 'total_page': total_page, 'total_count': total_count,
+                      'page_num': page_num, 'retlist': project_list}
+            if user.type == '0':
+                funcRight = {'addFlag': '1', 'editFlag': 1, 'delFlag': '1'}
+                result['funcRight'] = funcRight
+            return JsonResponse(result)
         else:
             save_log('项目查询', '0', '无符合条件的项目或无权限', ip, user_id)
             return JsonResponse({"ret": 1, "msg": "暂无数据"})
-    # 其他用户
-    else:
-        qs = ProjectUser.objects.filter(user__id=user_id, project__delete_state='0', delete_state='0')
 
 
 def add_project(request):
@@ -77,10 +106,10 @@ def add_project(request):
     user_right = project_right(request, action)
     if user_right != 'pass':
         return user_right
-    params = request.params
-    params_string = json.dumps(params)
     ip = get_ip(request)
-    user_id = params['user_id']
+    user_id = request.params['user_id']
+    params = request.params['data']
+    params_string = json.dumps(params)
     user = User.objects.get(id=user_id, delete_state='0', state='1')
     if user.type != '0':
         save_log(action, '0', '无项目添加权限', ip, user_id)
@@ -93,7 +122,6 @@ def add_project(request):
         detail = detail + ',详细信息：' + params['description'].strip()
     try:
         project.save()
-
         if 'admin' in params_string:
             admin = params['admin'].split(',')
             batch = [ProjectUser(project_id=project.id, user_id=temp, type='0') for temp in admin]
@@ -118,16 +146,16 @@ def update_project(request):
     user_right = project_right(request, action)
     if user_right != 'pass':
         return user_right
-    params = request.params
+    params = request.params['data']
     params_string = json.dumps(params)
     ip = get_ip(request)
-    user_id = params['user_id']
+    user_id = request.params['user_id']
     user = User.objects.get(id=user_id, delete_state='0', state='1')
     if user.type != '0':
         save_log(action, '0', '无权限', ip, user_id)
         return JsonResponse({'ret': 1, 'msg': '无权限'})
     try:
-        project = Project.objects.filter(id=params['project_id'].strip(), delete_state='0')
+        project = Project.objects.get(id=request.params['project_id'], delete_state='0')
         if 'name' in params_string:
             project.name = params['name'].strip()
         if 'description' in params_string:
@@ -135,17 +163,17 @@ def update_project(request):
         if 'state' in params_string:
             project.state = params['state'].strip()
         if 'admin' in params_string:
-            ProjectUser.objects.filter(type='0').delete()
+            ProjectUser.objects.filter(type='0',project_id=project.id).delete()
             admin = params['admin'].split(',')
             batch = [ProjectUser(project_id=project.id, user_id=temp, type='0') for temp in admin]
             ProjectUser.objects.bulk_create(batch)
         if 'developer' in params_string:
-            ProjectUser.objects.filter(type='1').delete()
+            ProjectUser.objects.filter(type='1',project_id=project.id).delete()
             developer = params['developer'].split(',')
             batch = [ProjectUser(project_id=project.id, user_id=temp, type='1') for temp in developer]
             ProjectUser.objects.bulk_create(batch)
         if 'others' in params_string:
-            ProjectUser.objects.filter(type='2').delete()
+            ProjectUser.objects.filter(type='2',project_id=project.id).delete()
             others = params['others'].split(',')
             batch = [ProjectUser(project_id=project.id, user_id=temp, type='2') for temp in others]
             ProjectUser.objects.bulk_create(batch)
@@ -171,16 +199,13 @@ def delete_project(request):
         save_log(action, '0', '无权限', ip, user_id)
         return JsonResponse({'ret': 1, 'msg': '无权限'})
     try:
-        delete_project_ids=params['delete_project_ids']
+        delete_project_ids = params['delete_project_ids'].split(',')
 
         projects = Project.objects.filter(id__in=delete_project_ids).update(delete_state='1')
-        ProjectUser.objects.filter(project__id__in=delete_project_ids).update(delete_sate='1')
-        detail = '成功删除项目：'
-        if len(projects) > 0:
-            for project in projects:
-                detail = detail + user.name + ','
-            save_log(action, '1', detail, ip, user_id)
-            return JsonResponse({"ret": 0, "msg": "删除成功"})
+        ProjectUser.objects.filter(project__id__in=delete_project_ids).update(delete_state='1')
+        detail = '成功删除项目：'+params['delete_project_ids']
+        save_log(action, '1', detail, ip, user_id)
+        return JsonResponse({"ret": 0, "msg": "删除成功"})
     except Exception:
         save_log(action, '0', '删除失败', ip, request.params['user_id'])
         return JsonResponse({"ret": 1, "msg": "删除失败，请稍后再试"})
@@ -198,5 +223,5 @@ def project_right(request, action):
     elif user_info['type'] == 2:
         save_log(action, '0', '用户登录超时', ip)
         return JsonResponse({"ret": 2, "msg": "登录超时"})
-    elif type == 1:
+    elif user_info['type'] == 1:
         return 'pass'  # 此处不做权限判断，在各个子模块直接判断
