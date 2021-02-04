@@ -61,8 +61,8 @@ def list_module(request):
                 module['create_time'] = item.create_time.strftime('%Y-%m-%d %H:%M')
                 module['num'] = index
                 index = index + 1
-                if module.parent_id is not None:
-                    module['parent_id']=module.parent_id
+                if item.parent_id is not None:
+                    module['parent_id']=item.parent_id
                 developer = item.moduleuser_set.filter(type='1', delete_state='0').annotate(
                     user_name=F('user__name')).values('user_id', 'user_name')
                 others = item.moduleuser_set.filter(type='2', delete_state='0').annotate(
@@ -75,9 +75,9 @@ def list_module(request):
                 module_list.append(module)
             result = {'ret': 0, 'msg': '查询成功',  'retlist': module_list}
             return JsonResponse(result)
-        else:
-            save_log('项目查询', '0', '无符合条件的项目或无权限', ip, user_id)
-            return JsonResponse({"ret": 1, "msg": "暂无数据"})
+    save_log('项目查询', '0', '无符合条件的项目或无权限', ip, user_id)
+    return JsonResponse({"ret": 1, "msg": "暂无数据"})
+
 
 
 def add_module(request):
@@ -90,15 +90,15 @@ def add_module(request):
     params = request.params['data']
     params_string = json.dumps(params)
     user = User.objects.get(id=user_id, delete_state='0', state='1')
+    project_id = params['project_id']
     if user.type != '0':
-        project_id=params['project_id']
         qs = ProjectUser.objects.filter(user_id=user_id, delete_state='0', type='0', project_id=project_id)
         if len(qs) == 0:
             save_log(action, '0', '无添加模块功能权限', ip, user_id)
             return JsonResponse({'ret': 1, 'msg': '无添加模块功能权限'})
     name = params['name'].strip()
     detail = '模块名称:' + name
-    module = Module(name=name,project_id=project_id)
+    module = Module(name=name,project_id=project_id,user_id=user_id)
     if 'parent_id' in params_string:
         module.parent_id=params['parent_id']
     try:
@@ -185,7 +185,7 @@ def delete_module(request):
     try:
         Module.objects.filter(id__in=delete_module_ids).update(delete_state='1')
         ModuleUser.objects.filter(module_id__in=delete_module_ids).update(delete_state='1')
-        detail = '成功删除模块：' + params['delete_project_ids']
+        detail = '成功删除模块：' + params['delete_module_ids']
         save_log(action, '1', detail, ip, user_id)
         return JsonResponse({"ret": 0, "msg": "删除成功"})
     except Exception:

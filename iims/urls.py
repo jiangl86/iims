@@ -16,12 +16,14 @@ Including another URLconf
 from django.urls import path
 from service.project import project
 from service.user import user
+from service.module import module
+from service.interface import interface
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
     path('api/user', user.dispatcher),
     path('api/project', project.dispatcher),
-    # path('api/module', corpcate.dispatcher),
-    # path('api/interface', user.dispatcher),
+    path('api/module', module.dispatcher),
+    path('api/interface', interface.dispatcher),
     # path('api/log', corp.upload_file)
 ]
