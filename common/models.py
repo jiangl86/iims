@@ -71,6 +71,7 @@ class ModuleUser(models.Model):
 class Interface(models.Model):
     name = models.CharField(max_length=400)
     module = models.ForeignKey(Module, on_delete=models.CASCADE)
+    description = models.CharField(max_length=2000, null=True)
     design = models.CharField(max_length=4000, null=True)
     address = models.CharField(max_length=500, null=True)
     params = models.CharField(max_length=2000, null=True)

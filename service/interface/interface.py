@@ -60,7 +60,7 @@ def list_interface(request):
             module_ids.append(item['id'])
             module = {'id': item['id'], 'name': item['name']}
             if item['parent_id'] is not None:
-                module['parent_id'] = module.parent_id
+                module['parent_id'] = item['parent_id']
             if is_project_admin or item['user_type'] == '1':
                 module['funcRight'] = {'addFlag': '1', 'editFlag': '1', 'delFlag': 1}
             module_list.append(module)
@@ -95,28 +95,30 @@ def add_interface(request):
     if has_right is False:
         save_log(action, '0', '无权限', ip, user_id)
         return JsonResponse({'ret': 1, 'msg': '无权限'})
-    name = params['name'].strip()
+    name = params['key_name'].strip()
     detail = '接口名称:' + name
     interface = Interface(name=name, module_id=module_id, user_id=user_id)
     interface_history = InterfaceHistory(action='添加', user_id=user_id)
-    if 'design' in params_string:
-        interface.design = params['design'].strip()
-        interface_history.design = params['design'].strip()
-    if 'address' in params_string:
-        interface.address = params['address'].strip()
-        interface_history.address = params['address'].strip()
-    if 'params' in params_string:
-        interface.params = params['params'].strip()
-        interface_history.params = params['params'].strip()
-    if 'result' in params_string:
-        interface.result = params['result'].strip()
-        interface_history.result = params['result'].strip()
-    if 'state' in params_string:
-        interface.state = params['state']
+    if 'key_description' in params_string:
+        interface.description = params['key_description'].strip()
+        interface_history.description = params['key_description'].strip()
+    if 'key_design' in params_string:
+        interface.design = params['key_design'].strip()
+        interface_history.design = params['key_design'].strip()
+    if 'key_address' in params_string:
+        interface.address = params['key_address'].strip()
+        interface_history.address = params['key_address'].strip()
+    if 'key_params' in params_string:
+        interface.params = params['key_params'].strip()
+        interface_history.params = params['key_params'].strip()
+    if 'key_result' in params_string:
+        interface.result = params['key_result'].strip()
+        interface_history.result = params['key_result'].strip()
+    if 'key_state' in params_string:
+        interface.state = params['key_state']
     try:
         interface.save()
         interface_history.interface_id = interface.id
-        interface_history.description = '添加接口，详细信息见具体内容'
         interface_history.save()
         save_log(action, '1', detail, ip, user_id)
         return JsonResponse({'ret': 0, 'msg': '添加成功', 'interface_id': interface.id})
@@ -142,23 +144,26 @@ def update_interface(request):
             save_log(action, '0', '无权限', ip, user_id)
             return JsonResponse({'ret': 1, 'msg': '无权限'})
         interface_history = InterfaceHistory(user_id=user_id, action='修改', interface_id=interface_id)
-        if 'name' in params_string:
-            interface.name = params['name'].strip()
-            interface_history.name = params['name'].strip()
-        if 'design' in params_string:
-            interface.design = params['design'].strip()
-            interface_history.design = params['design'].strip()
-        if 'address' in params_string:
-            interface.address = params['address'].strip()
-            interface_history.address = params['address'].strip()
-        if 'params' in params_string:
-            interface.params = params['params'].strip()
-            interface_history.params = params['params'].strip()
-        if 'result' in params_string:
-            interface.result = params['result'].strip()
-            interface_history.result = params['result'].strip()
-        if 'state' in params_string:
-            state = params['state']
+        if 'key_name' in params_string:
+            interface.name = params['key_name'].strip()
+            interface_history.name = params['key_name'].strip()
+        if 'key_description' in params_string:
+            interface.description = params['key_description'].strip()
+            interface_history.description = params['key_description'].strip()
+        if 'key_design' in params_string:
+            interface.design = params['key_design'].strip()
+            interface_history.design = params['key_design'].strip()
+        if 'key_address' in params_string:
+            interface.address = params['key_address'].strip()
+            interface_history.address = params['key_address'].strip()
+        if 'key_params' in params_string:
+            interface.params = params['key_params'].strip()
+            interface_history.params = params['key_params'].strip()
+        if 'key_result' in params_string:
+            interface.result = params['key_result'].strip()
+            interface_history.result = params['key_result'].strip()
+        if 'key_state' in params_string:
+            state = params['key_state']
             interface.state = state
             state_info = get_state_info(state)
             interface_history.action = '修改并变更状态为' + state_info
