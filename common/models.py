@@ -91,3 +91,4 @@ class InterfaceHistory(models.Model):
     description = models.CharField(max_length=1000)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     delete_state = models.CharField(max_length=1, default='0')
+    create_time = models.DateTimeField(default=datetime.datetime.now)

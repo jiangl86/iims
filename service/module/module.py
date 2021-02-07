@@ -2,7 +2,7 @@ from django.http import JsonResponse
 import json
 from common.common import get_ip, get_user
 from service.log.log import save_log
-from common.models import ProjectUser, Module,ModuleUser, User
+from common.models import ProjectUser, Module, ModuleUser, User
 from django.db.models import Q, F
 import math
 
@@ -31,7 +31,7 @@ def dispatcher(request):
 
 
 def list_module(request):
-    action='模块查询'
+    action = '模块查询'
     user_right = module_right(request, action)
     if user_right != 'pass':
         return user_right
@@ -39,17 +39,17 @@ def list_module(request):
     params = request.params
     params_string = json.dumps(params)
     user_id = params['user_id']
-    project_id=params['project_id']
+    project_id = params['project_id']
     user = User.objects.get(id=user_id)
     module_list = []
     # 如果不是系统管理员，需要先查询用户是否是该项目管理员，不是的话直接返回无权限
     if user.type != '0':
         qs = ProjectUser.objects.filter(user_id=user_id, delete_state='0', type='0', project_id=project_id)
-        if len(qs)==0:
-            save_log(action,'0','无查看模块功能权限',ip,user_id)
-            return JsonResponse({'ret':1,'msg':'无查看模块功能权限'})
+        if len(qs) == 0:
+            save_log(action, '0', '无查看模块功能权限', ip, user_id)
+            return JsonResponse({'ret': 1, 'msg': '无查看模块功能权限'})
 
-    qs = Module.objects.filter(delete_state='0',project_id=project_id).all()
+    qs = Module.objects.filter(delete_state='0', project_id=project_id).all()
     if len(qs) > 0:
         if 'name' in params_string:
             name = params['name'].strip()
@@ -62,7 +62,7 @@ def list_module(request):
                 module['num'] = index
                 index = index + 1
                 if item.parent_id is not None:
-                    module['parent_id']=item.parent_id
+                    module['parent_id'] = item.parent_id
                 developer = item.moduleuser_set.filter(type='1', delete_state='0').annotate(
                     user_name=F('user__name')).values('user_id', 'user_name')
                 others = item.moduleuser_set.filter(type='2', delete_state='0').annotate(
@@ -73,11 +73,10 @@ def list_module(request):
                     module['others'] = list(others)
                 print(module)
                 module_list.append(module)
-            result = {'ret': 0, 'msg': '查询成功',  'retlist': module_list}
+            result = {'ret': 0, 'msg': '查询成功', 'retlist': module_list}
             return JsonResponse(result)
     save_log('项目查询', '0', '无符合条件的项目或无权限', ip, user_id)
     return JsonResponse({"ret": 1, "msg": "暂无数据"})
-
 
 
 def add_module(request):
@@ -98,9 +97,9 @@ def add_module(request):
             return JsonResponse({'ret': 1, 'msg': '无添加模块功能权限'})
     name = params['name'].strip()
     detail = '模块名称:' + name
-    module = Module(name=name,project_id=project_id,user_id=user_id)
+    module = Module(name=name, project_id=project_id, user_id=user_id)
     if 'parent_id' in params_string:
-        module.parent_id=params['parent_id']
+        module.parent_id = params['parent_id']
     try:
         module.save()
         if 'developer' in params_string:
@@ -109,6 +108,14 @@ def add_module(request):
             ModuleUser.objects.bulk_create(batch)
         if 'others' in params_string:
             others = params['others'].split(',')
+            # 删除其他用户中已在开发人员中存在的用户
+            if 'developer' in params_string:
+                i = len(others) - 1
+                while i >= 0:
+                    for dev_user in developer:
+                        if others[i] == dev_user:
+                            others.pop(i)
+                    i = i - 1
             batch = [ModuleUser(module_id=module.id, user_id=temp, type='2') for temp in others]
             ModuleUser.objects.bulk_create(batch)
         save_log(action, '1', detail, ip, user_id)
@@ -131,8 +138,10 @@ def update_module(request):
     module_id = request.params['module_id']
     if user.type != '0':
         try:
-            qs = Module.objects.get(id=module_id, delete_state='0').project.projectuser_set.filter(user_id=user_id,type='0',delete_state='0')
-            if len(qs)==0:
+            qs = Module.objects.get(id=module_id, delete_state='0').project.projectuser_set.filter(user_id=user_id,
+                                                                                                   type='0',
+                                                                                                   delete_state='0')
+            if len(qs) == 0:
                 save_log(action, '0', '无修改模块功能权限', ip, user_id)
                 return JsonResponse({'ret': 1, 'msg': '无修改模块功能权限'})
         except Exception:
@@ -150,6 +159,14 @@ def update_module(request):
         if 'others' in params_string:
             ModuleUser.objects.filter(type='2', module_id=module.id).delete()
             others = params['others'].split(',')
+            # 删除其他用户中已在开发人员中存在的用户
+            if 'developer' in params_string:
+                i = len(others) - 1
+                while i >= 0:
+                    for dev_user in developer:
+                        if others[i] == dev_user:
+                            others.pop(i)
+                    i = i - 1
             batch = [ModuleUser(module_id=module.id, user_id=temp, type='2') for temp in others]
             ModuleUser.objects.bulk_create(batch)
         module.save()
@@ -170,7 +187,7 @@ def delete_module(request):
     ip = get_ip(request)
     user_id = params['user_id']
     user = User.objects.get(id=user_id, delete_state='0', state='1')
-    delete_module_ids=params['delete_module_ids'].split(',')
+    delete_module_ids = params['delete_module_ids'].split(',')
     if user.type != '0':
         qs = Module.objects.filter(id__in=delete_module_ids, delete_state='0')
         if len(qs) > 0:
@@ -180,7 +197,7 @@ def delete_module(request):
                     save_log(action, '0', '无修改模块功能权限', ip, user_id)
                     return JsonResponse({'ret': 1, 'msg': '无修改模块功能权限'})
         else:
-            save_log(action, '0',params_string, ip, user_id)
+            save_log(action, '0', params_string, ip, user_id)
             return JsonResponse({'ret': 1, 'msg': '参数错误'})
     try:
         Module.objects.filter(id__in=delete_module_ids).update(delete_state='1')
@@ -207,6 +224,3 @@ def module_right(request, action):
         return JsonResponse({"ret": 2, "msg": "登录超时"})
     elif user_info['type'] == 1:
         return 'pass'  # 此处不做权限判断，在各个子模块直接判断
-
-
-

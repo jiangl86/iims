@@ -42,19 +42,29 @@ def list_interface(request):
     params_string = json.dumps(params)
     user_id = params['user_id']
     project_id = params['project_id']
+    # 查询出项目下所有模块信息
+    all_modules = Module.objects.filter(delete_state='0', project_id=project_id).values('id', 'name', 'parent_id')
+    all_modules_list = []
+    if len(all_modules) > 0:
+        all_modules_list = list(all_modules)
+    else:
+        save_log(action, '0', '无符合条件的接口或无权限', ip, user_id)
+        return JsonResponse({"ret": 1, "msg": "暂无数据"})
     # 如果是系统管理员和该项目管理员，返回该项目所有模块，否则只返回和其相关的模块
-    # 如果不是系统管理员，需要先查询用户是否是该项目管理员，不是的话直接返回无权限
+    # 如果不是系统管理员，需要先查询用户是否是该项目管理员，不是的话直接返回无权限、
     is_project_admin = is_project_right(user_id, project_id)
+    print(is_project_admin)
     if is_project_admin:
-        qs = Module.objects.filter(delete_state='0', project_id=project_id).values('id', 'name', 'parent_id')
+        qs = all_modules
     else:
         qs = Module.objects.filter(delete_state='0', project_id=project_id, moduleuser__delete_state='0',
                                    moduleuser__user_id=user_id).annotate(
-            user_type=F('moduleuser__type')).values('id', 'name', 'user_type', 'parent_id')
-    if len(qs) > 0:
-        module_list = []
-        module_ids = []
-        interface_list = []
+            user_type=F('moduleuser__type')).values('id', 'name', 'user_type', 'parent_id').distinct()
+    module_list = []
+    module_ids = []
+    interface_list = []
+    # 如果包含所有模块
+    if len(qs) == len(all_modules):
         index = 1
         for item in qs:
             module_ids.append(item['id'])
@@ -62,8 +72,73 @@ def list_interface(request):
             if item['parent_id'] is not None:
                 module['parent_id'] = item['parent_id']
             if is_project_admin or item['user_type'] == '1':
+                module['funcRight'] = {'addFlag': '1', 'editFlag': '1', 'delFlag': '1'}
+            module_list.append(module)
+    # 如果不包含所有模块，需要把对应模块的上下级模块都找出来，其中上级模块的权限只有查看，下级模块的权限同当前模块
+    elif len(qs) > 0:
+        child_modules = []
+        parent_modules = []
+        # 先找出上下级模块
+        for item in qs:
+            child_modules.extend(findChildModules(all_modules, item))
+            if item['parent_id'] is not None:
+                parent_modules.extend(findParentModules(all_modules, item))
+        # 排序
+        child_modules.sort(key=lambda child: child['id'])
+        parent_modules.sort(key=lambda parent: parent['id'])
+        # 删除子节点和parent节点中重复的数据，包括自身重复或者和qs重复的数据
+        i = len(child_modules) - 1
+        while i > 0:
+            if child_modules[i]['id'] == child_modules[i - 1]['id']:
+                child_modules.pop(i)
+            i = i - 1
+
+        i = len(child_modules) - 1
+        while i >= 0:
+            for item in qs:
+                if child_modules[i]['id'] == item['id']:
+                    child_modules.pop(i)
+                    break
+            i = i - 1
+
+        # 处理父节点
+        i = len(parent_modules) - 1
+        while i > 0:
+            if parent_modules[i]['id'] == parent_modules[i - 1]['id']:
+                parent_modules.pop(i)
+            i = i - 1
+
+        i = len(parent_modules) - 1
+        while i >= 0:
+            is_exist = False
+            for item in qs:
+                if parent_modules[i]['id'] == item['id']:
+                    is_exist = True
+                    parent_modules.pop(i)
+                    break
+            if is_exist is False:
+                parent_modules[i]['user_type'] = '2'  # 如果不是权限内的上级功能点，设置为普通用户
+            i = i - 1
+
+        # 处理返回数据
+        list_qs = list(qs)
+        print(list_qs)
+        list_qs.extend(parent_modules)
+        print('parent')
+        print(parent_modules)
+        list_qs.extend(child_modules)
+        print('child')
+        print(child_modules)
+        for item in list_qs:
+            module_ids.append(item['id'])
+            module = {'id': item['id'], 'name': item['name']}
+            if item['parent_id'] is not None:
+                module['parent_id'] = item['parent_id']
+            if is_project_admin or item['user_type'] == '1':
                 module['funcRight'] = {'addFlag': '1', 'editFlag': '1', 'delFlag': 1}
             module_list.append(module)
+
+    if len(module_ids) > 0:
         # 查询接口信息
         interface_qs = Interface.objects.filter(module_id__in=module_ids, delete_state='0').values('id', 'name',
                                                                                                    'module_id', 'state')
@@ -78,6 +153,36 @@ def list_interface(request):
         return JsonResponse(result)
     save_log(action, '0', '无符合条件的接口或无权限', ip, user_id)
     return JsonResponse({"ret": 1, "msg": "暂无数据"})
+
+
+# 查找节点所有子节点，并处理权限，list 是所有的模块集合,module是要查找的模块
+def findChildModules(module_list, module):
+    child_module_list = []
+    for item in module_list:
+        if item['parent_id'] == module['id']:
+            # 如果子节点还没有权限，或者仅是普通人员权限，则直接用父节点权限
+            if item.__contains__('user_type') and item['user_type'] == '1':
+                pass
+            else:
+                item['user_type'] = module['user_type']
+            child_module_list.append(item)
+            childs = findChildModules(module_list, item)
+            if len(childs) > 0:
+                child_module_list.extend(childs)
+    return child_module_list
+
+
+# 查找节点所有父节点
+def findParentModules(module_list, module):
+    parent_module_list = []
+    for item in module_list:
+        if module['parent_id'] == item['id']:
+            parent_module_list.append(item)
+            if item['parent_id'] is not None:
+                parents = findParentModules(module_list, item)
+                if len(parents) > 0:
+                    parent_module_list.extend(parents)
+    return parent_module_list
 
 
 def add_interface(request):
@@ -170,7 +275,8 @@ def update_interface(request):
         interface_history.description = '修改接口，详细信息见具体内容'
         interface.save()
         interface_history.save()
-        save_log(action, '1', '修改成功,接口id:' + interface_id, ip, user_id)
+        detail_info='修改成功,接口id:' + str(interface_id)
+        save_log(action, '1', detail_info, ip, user_id)
         return JsonResponse({'ret': 0, 'msg': '添加成功', 'interface_id': interface.id})
     except Exception:
         save_log(action, '0', '参数错误', ip, user_id)
@@ -224,11 +330,11 @@ def get_info(request):
         interface = Interface.objects.get(id=interface_id, delete_state='0')
         history = interface.interfacehistory_set.values().order_by('create_time')
         data = {'id': interface.id, 'name': interface.name, 'design': interface.design, 'address': interface.address,
-                'params': interface.params, 'result': interface.result,'state':interface.state}
-        if len(history)>0:
-            data['history_list']=list(history)
-        result = {'ret': 0, 'msg': '查询成功','data':data }
-        save_log(action,'1','查询接口信息',ip,user_id)
+                'params': interface.params, 'result': interface.result, 'state': interface.state}
+        if len(history) > 0:
+            data['history_list'] = list(history)
+        result = {'ret': 0, 'msg': '查询成功', 'data': data}
+        save_log(action, '1', '查询接口信息', ip, user_id)
         return JsonResponse(result)
     except Interface.DoesNotExist:
         save_log(action, '0', '参数错误', ip, user_id)
@@ -242,18 +348,18 @@ def delete_interface(request):
         return user_right
     ip = get_ip(request)
     user_id = request.params['user_id']
-    interface_id = request.params['interface_id']
+    interface_id = request.params['delete_interface_id']
     try:
         interface = Interface.objects.get(id=interface_id, delete_state='0')
-        has_right=is_module_right(user_id,interface.module_id)
+        has_right = is_module_right(user_id, interface.module_id)
         if has_right is False:
             save_log(action, '0', '无权限', ip, user_id)
             return JsonResponse({'ret': 1, 'msg': '无权限'})
-        interface.delete_state='1'
-        interface_history=InterfaceHistory(action='删除接口',user_id=user_id,interface_id=interface_id)
+        interface.delete_state = '1'
+        interface_history = InterfaceHistory(action='删除接口', user_id=user_id, interface_id=interface_id)
         interface.save()
         interface_history.save()
-        save_log(action, '1', '删除接口,接口id:' + interface_id, ip, user_id)
+        save_log(action, '1', '删除接口,接口id:' + str(interface_id), ip, user_id)
         return JsonResponse({'ret': 0, 'msg': '删除成功'})
     except Interface.DoesNotExist:
         save_log(action, '0', '参数错误', ip, user_id)
@@ -277,7 +383,7 @@ def interface_right(request, action):
 # 判断用户是否对整个项目有管理权限
 def is_project_right(user_id, project_id):
     user = User.objects.get(id=user_id)
-    if user.type == 0:
+    if user.type == '0':
         return True
     else:
         qs = ProjectUser.objects.filter(user_id=user_id, delete_state='0', type='0', project_id=project_id)
