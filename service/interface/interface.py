@@ -328,8 +328,8 @@ def get_info(request):
     interface_id = request.params['interface_id']
     try:
         interface = Interface.objects.get(id=interface_id, delete_state='0')
-        history = interface.interfacehistory_set.values().order_by('create_time')
-        data = {'id': interface.id, 'name': interface.name, 'design': interface.design, 'address': interface.address,
+        history = interface.interfacehistory_set.annotate(user_name=F('user__name')).values().order_by('-create_time')
+        data = {'id': interface.id, 'name': interface.name,'description': interface.description,  'design': interface.design, 'address': interface.address,
                 'params': interface.params, 'result': interface.result, 'state': interface.state}
         if len(history) > 0:
             data['history_list'] = list(history)
