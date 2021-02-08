@@ -7,6 +7,7 @@ from service.log.log import save_log
 from common.common import get_ip, get_user
 import math
 import uuid
+import hashlib
 
 
 def dispatcher(request):
@@ -144,6 +145,9 @@ def add_user(request):
     if type != '0':
         type = '1'
     initial_password = 'R' + phone + '@'  # 用md5加密转换
+    sha256 = hashlib.sha256()
+    sha256.update(initial_password.encode('utf-8'))
+    initial_password = sha256.hexdigest()
     user = User(name=name, phone=phone, account=account, password=initial_password, type=type, state='1')
     user.save()
     detail = '姓名' + name + ',电话:' + phone + ',账户:' + account + ',类型:'
