@@ -115,6 +115,10 @@ def add_project(request):
         save_log(action, '0', '无项目添加权限', ip, user_id)
         return JsonResponse({'ret': 1, 'msg': '无项目添加权限'})
     name = params['name'].strip()
+    qs = Project.objects.filter(name=name, delete_state='0')
+    if len(qs) > 0:
+        save_log(action, '0', '项目名称' + name, ip, user_id)
+        return JsonResponse({'ret': 1, 'msg': '项目已经存在，请使用其他名称'})
     detail = '项目名称:' + name
     project = Project(name=name)
     if 'description' in params_string:
@@ -163,17 +167,17 @@ def update_project(request):
         if 'state' in params_string:
             project.state = params['state'].strip()
         if 'admin' in params_string:
-            ProjectUser.objects.filter(type='0',project_id=project.id).delete()
+            ProjectUser.objects.filter(type='0', project_id=project.id).delete()
             admin = params['admin'].split(',')
             batch = [ProjectUser(project_id=project.id, user_id=temp, type='0') for temp in admin]
             ProjectUser.objects.bulk_create(batch)
         if 'developer' in params_string:
-            ProjectUser.objects.filter(type='1',project_id=project.id).delete()
+            ProjectUser.objects.filter(type='1', project_id=project.id).delete()
             developer = params['developer'].split(',')
             batch = [ProjectUser(project_id=project.id, user_id=temp, type='1') for temp in developer]
             ProjectUser.objects.bulk_create(batch)
         if 'others' in params_string:
-            ProjectUser.objects.filter(type='2',project_id=project.id).delete()
+            ProjectUser.objects.filter(type='2', project_id=project.id).delete()
             others = params['others'].split(',')
             batch = [ProjectUser(project_id=project.id, user_id=temp, type='2') for temp in others]
             ProjectUser.objects.bulk_create(batch)
@@ -203,7 +207,7 @@ def delete_project(request):
 
         projects = Project.objects.filter(id__in=delete_project_ids).update(delete_state='1')
         ProjectUser.objects.filter(project__id__in=delete_project_ids).update(delete_state='1')
-        detail = '成功删除项目：'+params['delete_project_ids']
+        detail = '成功删除项目：' + params['delete_project_ids']
         save_log(action, '1', detail, ip, user_id)
         return JsonResponse({"ret": 0, "msg": "删除成功"})
     except Exception:

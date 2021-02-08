@@ -73,7 +73,7 @@ def login(request):
 
 
 def list_user(request):
-    action='用户查询'
+    action = '用户查询'
     user_info = get_user(request)
     ip = get_ip(request)
     if user_info['type'] == 3:
@@ -94,31 +94,30 @@ def list_user(request):
     if 'phone' in params_string:
         phone = params['phone']
         qs = qs.filter(phone__contains=phone)
+    total_count = len(qs)
     if 'page_size' in json.dumps(request.params):
         page_size = int(request.params['page_size'])
         page_num = int(request.params['page_num'])
-        total_count = len(qs)
         total_page = math.ceil(total_count / page_size)
         if total_page < page_num and total_page > 0:
             page_num = total_page
         qs = qs[(page_num - 1) * page_size:page_num * page_size]
     else:
-        page_num=1
-        page_size=1000
-        total_page=1
+        page_num = 1
+        page_size = 1000
+        total_page = 1
     if len(qs) > 0:
         user_list = list(qs)
-        total_count = len(qs)
         index = 1
         for item in user_list:
             item['num'] = (page_num - 1) * page_size + index
             index = index + 1
-        user=User.objects.get(id=request.params['user_id'])
+        user = User.objects.get(id=request.params['user_id'])
         result = {'ret': 0, 'total_page': total_page, 'total_count': total_count, 'page_num': page_num,
                   'retlist': user_list}
-        if user.type=='0':
-            funcRight={'addFlag':'1','delFlag':'1','editFlag':1,'resetPassFlag':1}
-            result['funcRight']=funcRight
+        if user.type == '0':
+            funcRight = {'addFlag': '1', 'delFlag': '1', 'editFlag': 1, 'resetPassFlag': 1}
+            result['funcRight'] = funcRight
         return JsonResponse(result)
     return JsonResponse({"ret": 1, "msg": "暂无数据"})
 
@@ -163,7 +162,7 @@ def update_user(request):
     print(request.params)
     params = request.params['data']
     params_string = json.dumps(params)
-    ip=get_ip(request)
+    ip = get_ip(request)
     if 'update_user_id' not in json.dumps(request.params):
         return JsonResponse({"ret": 1, "msg": "无要修改的用户id"})
     try:
@@ -195,13 +194,13 @@ def update_user(request):
                 detail = detail + ',类型系统管理员'
             user.type = type
         if 'state' in params_string:
-            state=params['state']
-            if state!='1':
-                state='2'
-                detail=detail+',状态未激活'
+            state = params['state']
+            if state != '1':
+                state = '2'
+                detail = detail + ',状态未激活'
             else:
                 detail = detail + ',状态正常'
-            user.state=state
+            user.state = state
         user.save()
         save_log('用户修改', '1', detail, ip, request.params['user_id'])
         return JsonResponse({"ret": 0, "msg": "修改成功"})
@@ -288,8 +287,8 @@ def login_right(request, action):
     elif user_info['type'] == 2:
         save_log(action, '0', '用户登录超时', ip)
         return JsonResponse({"ret": 2, "msg": "登录超时"})
-    elif type == 1:
-        if user_info['user'].type == 1:
+    elif user_info['type'] == 1:
+        if user_info['user'].type == '1':
             save_log(action, '0', '用户无权限', ip)
             return JsonResponse({"ret": 1, "msg": "没有查看该功能权限"})
     return 'pass'
