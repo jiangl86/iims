@@ -162,13 +162,9 @@ def add_user(request):
     if type != '0':
         type = '1'
     initial_password = 'R' + phone + '@'  # 用md5加密转换
-<<<<<<< HEAD
+
     initial_password = encrypt(initial_password)
-=======
-    sha256 = hashlib.sha256()
-    sha256.update(initial_password.encode('utf-8'))
-    initial_password = sha256.hexdigest()
->>>>>>> 5401ce1a1dd68788ab21ed321451af01df88ca3f
+
     user = User(name=name, phone=phone, account=account, password=initial_password, type=type, state='1')
     user.save()
     detail = '姓名' + name + ',电话:' + phone + ',账户:' + account + ',类型:'

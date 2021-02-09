@@ -41,13 +41,9 @@ def list_interface(request):
     user_id = params['user_id']
     project_id = params['project_id']
     # 查询出项目下所有模块信息
-<<<<<<< HEAD
     all_modules = Module.objects.filter(delete_state='0', project_id=project_id, project__delete_state='0').values('id',
                                                                                                                    'name',
                                                                                                                    'parent_id')
-=======
-    all_modules = Module.objects.filter(delete_state='0', project_id=project_id,project__delete_state='0').values('id', 'name', 'parent_id')
->>>>>>> 5401ce1a1dd68788ab21ed321451af01df88ca3f
     all_modules_list = []
     if len(all_modules) > 0:
         all_modules_list = list(all_modules)
