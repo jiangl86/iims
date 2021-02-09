@@ -7,6 +7,7 @@ from service.log.log import save_log
 from common.common import get_ip, get_user
 import math
 import uuid
+import hashlib
 
 
 def dispatcher(request):
@@ -16,9 +17,7 @@ def dispatcher(request):
         request.params = json.loads(request.body)
     else:
         return JsonResponse({"ret": 1, "msg": "无法提供对应服务"})
-    print(request.params)
     action = request.params['action']
-    print(action)
     if action == 'login':
         return login(request)
     elif action == 'list_user':
@@ -33,6 +32,8 @@ def dispatcher(request):
         return reset_password(request)
     elif action == 'delete_user':
         return delete_user(request)
+    elif action=='get_self_info':
+        return get_self_info(request)
     else:
         return JsonResponse({"ret": 1, "msg": "无法提供对应服务"})
 
@@ -122,6 +123,24 @@ def list_user(request):
     return JsonResponse({"ret": 1, "msg": "暂无数据"})
 
 
+# 获取用户信息
+def get_self_info(request):
+    action = '查询用户信息'
+    user_info = get_user(request)
+    ip = get_ip(request)
+    if user_info['type'] == 3:
+        save_log(action, '0', '用户未登录', ip)
+        return JsonResponse({"ret": 2, "msg": "未登录"})
+    elif user_info['type'] == 2:
+        save_log(action, '0', '用户登录超时', ip)
+        return JsonResponse({"ret": 2, "msg": "登录超时"})
+    else:
+        user = user_info['user']
+        return JsonResponse({"ret": 0, "msg": "查询成功", 'user_name': user.name, 'type': user.type, 'phone': user.phone,
+                             'account': user.account})
+
+
+# 添加用户
 def add_user(request):
     user_right = login_right(request, '用户添加')
     if user_right != 'pass':
@@ -140,10 +159,10 @@ def add_user(request):
     if len(qs) > 0:
         return JsonResponse({"ret": 1, "msg": "账户或手机号已经存在"})
     type = params['type']
-
     if type != '0':
         type = '1'
     initial_password = 'R' + phone + '@'  # 用md5加密转换
+    initial_password = encrypt(initial_password)
     user = User(name=name, phone=phone, account=account, password=initial_password, type=type, state='1')
     user.save()
     detail = '姓名' + name + ',电话:' + phone + ',账户:' + account + ',类型:'
@@ -159,7 +178,6 @@ def update_user(request):
     user_right = login_right(request, '用户修改')
     if user_right != 'pass':
         return user_right
-    print(request.params)
     params = request.params['data']
     params_string = json.dumps(params)
     ip = get_ip(request)
@@ -244,7 +262,8 @@ def reset_password(request):
     update_user_id = request.params['update_user_id']
     try:
         user = User.objects.get(id=update_user_id, delete_state='0')
-        user.password = 'sss'  # 用md5加密
+        password = "R" + user.phone + '@'
+        user.password = encrypt(password)  # 用sha256加密
         user.save()
         ip = get_ip(request)
         save_log('用户密码重置', '1', '重置成功', ip, request.params['user_id'])
@@ -292,3 +311,9 @@ def login_right(request, action):
             save_log(action, '0', '用户无权限', ip)
             return JsonResponse({"ret": 1, "msg": "没有查看该功能权限"})
     return 'pass'
+
+
+def encrypt(str):
+    sha256 = hashlib.sha256()
+    sha256.update(str.encode('utf-8'))
+    return sha256.hexdigest()

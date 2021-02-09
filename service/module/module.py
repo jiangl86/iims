@@ -15,9 +15,7 @@ def dispatcher(request):
         request.params = json.loads(request.body)
     else:
         return JsonResponse({"ret": 1, "msg": "无法提供对应服务"})
-    print(request.params)
     action = request.params['action']
-    print(action)
     if action == 'list_module':
         return list_module(request)
     elif action == 'add_module':
@@ -71,7 +69,6 @@ def list_module(request):
                     module['developer'] = list(developer)
                 if len(others) > 0:
                     module['others'] = list(others)
-                print(module)
                 module_list.append(module)
             result = {'ret': 0, 'msg': '查询成功', 'retlist': module_list}
             return JsonResponse(result)

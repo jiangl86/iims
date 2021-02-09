@@ -13,9 +13,7 @@ def dispatcher(request):
         request.params = json.loads(request.body)
     else:
         return JsonResponse({"ret": 1, "msg": "无法提供对应服务"})
-    print(request.params)
     action = request.params['action']
-    print(action)
     if action == 'list_interface':
         return list_interface(request)
     elif action == 'add_interface':
@@ -43,7 +41,9 @@ def list_interface(request):
     user_id = params['user_id']
     project_id = params['project_id']
     # 查询出项目下所有模块信息
-    all_modules = Module.objects.filter(delete_state='0', project_id=project_id).values('id', 'name', 'parent_id')
+    all_modules = Module.objects.filter(delete_state='0', project_id=project_id, project__delete_state='0').values('id',
+                                                                                                                   'name',
+                                                                                                                   'parent_id')
     all_modules_list = []
     if len(all_modules) > 0:
         all_modules_list = list(all_modules)
@@ -51,9 +51,8 @@ def list_interface(request):
         save_log(action, '0', '无符合条件的接口或无权限', ip, user_id)
         return JsonResponse({"ret": 1, "msg": "暂无数据"})
     # 如果是系统管理员和该项目管理员，返回该项目所有模块，否则只返回和其相关的模块
-    # 如果不是系统管理员，需要先查询用户是否是该项目管理员，不是的话直接返回无权限、
+    # 如果不是系统管理员，需要先查询用户是否是该项目管理员或开发人员，不是的话直接返回无权限、
     is_project_admin = is_project_right(user_id, project_id)
-    print(is_project_admin)
     if is_project_admin:
         qs = all_modules
     else:
@@ -63,6 +62,7 @@ def list_interface(request):
     module_list = []
     module_ids = []
     interface_list = []
+
     # 如果包含所有模块
     if len(qs) == len(all_modules):
         index = 1
@@ -75,7 +75,7 @@ def list_interface(request):
                 module['funcRight'] = {'addFlag': '1', 'editFlag': '1', 'delFlag': '1'}
             module_list.append(module)
     # 如果不包含所有模块，需要把对应模块的上下级模块都找出来，其中上级模块的权限只有查看，下级模块的权限同当前模块
-    elif len(qs) > 0:
+    elif len(qs) > 0 or is_project_normal_user(user_id,project_id):
         child_modules = []
         parent_modules = []
         # 先找出上下级模块
@@ -122,13 +122,25 @@ def list_interface(request):
 
         # 处理返回数据
         list_qs = list(qs)
-        print(list_qs)
         list_qs.extend(parent_modules)
-        print('parent')
-        print(parent_modules)
         list_qs.extend(child_modules)
-        print('child')
-        print(child_modules)
+
+        # 判断用户是否是整个项目的普通用户，如果是，需要把其他按上述查找逻辑没有找出的模块添加到用户的查看列表中
+        if is_project_normal_user(user_id, project_id):
+            i = len(all_modules_list) - 1
+            while i >= 0:
+                is_exist = False
+                for item in list_qs:
+                    if all_modules_list[i]['id'] == item['id']:
+                        all_modules_list.pop(i)
+                        is_exist = True
+                        break
+                if is_exist is False:
+                    all_modules_list[i]['user_type'] = '2'  # 如果不是权限内的功能点，设置为普通用户
+                i = i - 1
+            list_qs.extend(all_modules_list)
+
+        # 给模块添加权限
         for item in list_qs:
             module_ids.append(item['id'])
             module = {'id': item['id'], 'name': item['name']}
@@ -275,7 +287,7 @@ def update_interface(request):
         interface_history.description = '修改接口，详细信息见具体内容'
         interface.save()
         interface_history.save()
-        detail_info='修改成功,接口id:' + str(interface_id)
+        detail_info = '修改成功,接口id:' + str(interface_id)
         save_log(action, '1', detail_info, ip, user_id)
         return JsonResponse({'ret': 0, 'msg': '添加成功', 'interface_id': interface.id})
     except Exception:
@@ -329,7 +341,8 @@ def get_info(request):
     try:
         interface = Interface.objects.get(id=interface_id, delete_state='0')
         history = interface.interfacehistory_set.annotate(user_name=F('user__name')).values().order_by('-create_time')
-        data = {'id': interface.id, 'name': interface.name,'description': interface.description,  'design': interface.design, 'address': interface.address,
+        data = {'id': interface.id, 'name': interface.name, 'description': interface.description,
+                'design': interface.design, 'address': interface.address,
                 'params': interface.params, 'result': interface.result, 'state': interface.state}
         if len(history) > 0:
             data['history_list'] = list(history)
@@ -380,13 +393,25 @@ def interface_right(request, action):
         return 'pass'  # 此处不做权限判断，在各个子模块直接判断
 
 
-# 判断用户是否对整个项目有管理权限
+# 判断用户是否项目普通用户
+def is_project_normal_user(user_id, project_id):
+    user = User.objects.get(id=user_id)
+    if user.type == '0':
+        return True
+    else:
+        qs = ProjectUser.objects.filter(user_id=user_id, delete_state='0', project_id=project_id, type='2')
+        if len(qs) > 0:
+            return True
+    return False
+
+
+# 判断用户是否对整个项目的各个模块有接口增删改权限,系统管理员，项目管理员及整个项目的开发人员有权限
 def is_project_right(user_id, project_id):
     user = User.objects.get(id=user_id)
     if user.type == '0':
         return True
     else:
-        qs = ProjectUser.objects.filter(user_id=user_id, delete_state='0', type='0', project_id=project_id)
+        qs = ProjectUser.objects.filter(user_id=user_id, delete_state='0', project_id=project_id).filter(~Q(type='2'))
         if len(qs) > 0:
             return True
     return False

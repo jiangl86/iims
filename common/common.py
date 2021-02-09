@@ -21,8 +21,6 @@ def get_user(request):
         return {'user': None, 'type': 3}
     user_id = request.params['user_id']
     token = request.headers['authorization']
-    print(token)
-
     try:
         user = User.objects.get(id=user_id, token=token, delete_state='0', state='1')
         if int(time.time()) - user.token_time >= 24 * 60 * 60:

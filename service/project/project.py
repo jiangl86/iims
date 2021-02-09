@@ -15,9 +15,7 @@ def dispatcher(request):
         request.params = json.loads(request.body)
     else:
         return JsonResponse({"ret": 1, "msg": "无法提供对应服务"})
-    print(request.params)
     action = request.params['action']
-    print(action)
     if action == 'list_project':
         return list_project(request)
     elif action == 'add_project':
@@ -88,7 +86,6 @@ def list_project(request):
                     is_admin = item.projectuser_set.filter(type='0', delete_state='0', user_id=user_id)
                     if len(is_admin) > 0:
                         project['editFlag'] = '1'
-                print(project)
                 project_list.append(project)
             result = {'ret': 0, 'msg': '查询成功', 'total_page': total_page, 'total_count': total_count,
                       'page_num': page_num, 'retlist': project_list}
@@ -204,7 +201,6 @@ def delete_project(request):
         return JsonResponse({'ret': 1, 'msg': '无权限'})
     try:
         delete_project_ids = params['delete_project_ids'].split(',')
-
         projects = Project.objects.filter(id__in=delete_project_ids).update(delete_state='1')
         ProjectUser.objects.filter(project__id__in=delete_project_ids).update(delete_state='1')
         detail = '成功删除项目：' + params['delete_project_ids']
