@@ -88,7 +88,7 @@ class InterfaceHistory(models.Model):
     address = models.CharField(max_length=500, null=True)
     params = models.CharField(max_length=2000, null=True)
     result = models.CharField(max_length=4000, null=True)
-    description = models.CharField(max_length=1000)
+    description = models.CharField(max_length=1000,null=True)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     delete_state = models.CharField(max_length=1, default='0')
     create_time = models.DateTimeField(default=datetime.datetime.now)

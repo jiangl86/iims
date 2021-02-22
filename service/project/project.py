@@ -43,7 +43,21 @@ def list_project(request):
         qs = Project.objects.filter(delete_state='0').all()
     # 否则查询所有当前用户参与的项目列表
     else:
-        qs = Project.objects.filter(projectuser__user_id=user_id, projectuser__delete_state='0').distinct()
+        project_ids = []
+        # 查询项目相关人员
+        qs = Project.objects.filter(projectuser__user_id=user_id, projectuser__delete_state='0',
+                                    delete_state='0').distinct()
+        if len(qs) > 0:
+            for project_item in qs:
+                project_ids.append(project_item.id)
+        # 查询模块相关人员
+        qs2 = Module.objects.filter(moduleuser__user_id=user_id, moduleuser__delete_state='0',
+                                    delete_state='0').exclude(project_id__in=project_ids).values('project_id').distinct()
+        if len(qs2) > 0:
+            for module_item in qs2:
+                project_ids.append(module_item['project_id'])
+        if len(project_ids) > 0:
+            qs = Project.objects.filter(id__in=project_ids)
     if len(qs) > 0:
         if 'name' in params_string:
             name = params['name'].strip()
@@ -96,6 +110,12 @@ def list_project(request):
         else:
             save_log('项目查询', '0', '无符合条件的项目或无权限', ip, user_id)
             return JsonResponse({"ret": 1, "msg": "暂无数据"})
+    else:
+        save_log('项目查询', '1', '赞无符合条件的数据', ip, user_id)
+        result = {"ret": 1, "msg": "暂无数据", 'total_count': 0}
+        if user.type == '0' or user.type == 0:
+            result['funcRight'] = {'addFlag': '1', 'editFlag': 1, 'delFlag': '1'}
+        return JsonResponse(result)
 
 
 def add_project(request):

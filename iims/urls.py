@@ -18,6 +18,8 @@ from service.project import project
 from service.user import user
 from service.module import module
 from service.interface import interface
+from service.statistic import interface_statistic
+from service.log import log
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
@@ -25,5 +27,6 @@ urlpatterns = [
     path('api/project', project.dispatcher),
     path('api/module', module.dispatcher),
     path('api/interface', interface.dispatcher),
-    # path('api/log', corp.upload_file)
+    path('api/statistic', interface_statistic.dispatcher),
+    path('api/log', log.dispatcher)
 ]

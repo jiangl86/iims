@@ -18,6 +18,7 @@ def dispatcher(request):
     else:
         return JsonResponse({"ret": 1, "msg": "无法提供对应服务"})
     action = request.params['action']
+    print(request.params)
     if action == 'login':
         return login(request)
     elif action == 'list_user':

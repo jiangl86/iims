@@ -23,7 +23,7 @@ def get_user(request):
     token = request.headers['authorization']
     try:
         user = User.objects.get(id=user_id, token=token, delete_state='0', state='1')
-        if int(time.time()) - user.token_time >= 24 * 60 * 60:
+        if int(time.time()) - user.token_time >= 7*24 * 60 * 60:
             return {'user': None, 'type': 2}
         return {'user': user, 'type': 1}
     except User.DoesNotExist:

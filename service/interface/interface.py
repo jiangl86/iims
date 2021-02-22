@@ -233,15 +233,15 @@ def add_interface(request):
         interface_history.result = params['key_result'].strip()
     if 'key_state' in params_string:
         interface.state = params['key_state']
-    try:
-        interface.save()
-        interface_history.interface_id = interface.id
-        interface_history.save()
-        save_log(action, '1', detail, ip, user_id)
-        return JsonResponse({'ret': 0, 'msg': '添加成功', 'interface_id': interface.id})
-    except Exception:
-        save_log(action, '0', '添加失败', ip, user_id)
-        return JsonResponse({'ret': 1, 'msg': '添加失败，请稍候再试'})
+    # try:
+    interface.save()
+    interface_history.interface_id = interface.id
+    interface_history.save()
+    save_log(action, '1', detail, ip, user_id)
+    return JsonResponse({'ret': 0, 'msg': '添加成功', 'interface_id': interface.id})
+    # except Exception:
+    #     save_log(action, '0', '添加失败', ip, user_id)
+    #     return JsonResponse({'ret': 1, 'msg': '添加失败，请稍候再试'})
 
 
 def update_interface(request):
@@ -322,7 +322,7 @@ def update_state(request):
             interface_history.description = params['description']
         interface.save()
         interface_history.save()
-        save_log(action, '1', '变更状态完成,接口id:' + interface_id, ip, user_id)
+        save_log(action, '1', '变更状态完成,接口id:' + str(interface_id), ip, user_id)
         return JsonResponse({'ret': 0, 'msg': '变更成功'})
     except Exception:
         save_log(action, '0', '参数错误', ip, user_id)
